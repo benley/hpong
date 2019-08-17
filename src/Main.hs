@@ -97,8 +97,8 @@ update _ seconds = paddleBounce . wallBounce . moveBall seconds
 wallCollision :: Position -> Bool
 wallCollision (_, y) = topCollision || bottomCollision
   where
-    topCollision    = y - ballRadius <= -fromIntegral height / 2
-    bottomCollision = y + ballRadius >=  fromIntegral height / 2
+    bottomCollision = y - ballRadius <= -(fromIntegral height / 2) + 5
+    topCollision    = y + ballRadius >=  (fromIntegral height / 2) - 5
 
 -- | Detect a collision with one of the side walls. Upon collisions,
 -- update the velocity of the ball to bounce it off the wall.
