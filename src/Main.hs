@@ -121,14 +121,17 @@ paddleBounce game = game { ballVel = (vx', vy) }
           else vx
 
 paddleCollision :: PongGame -> Bool
-paddleCollision Game{ballLoc = (x, y), playerR = (playerR_x, playerR_y), playerL = (playerL_x, playerL_y)} = leftCollision || rightCollision
+paddleCollision Game{ ballLoc = (x, y)
+                    , playerR = (playerR_x, playerR_y)
+                    , playerL = (playerL_x, playerL_y) } =
+  leftCollision || rightCollision
   where
-    leftCollision =    x <= rightEdgeOfLeftPaddle
-                    && y <= topEdgeOfLeftPaddle
-                    && y >= bottomEdgeOfLeftPaddle
-    rightCollision = x >= leftEdgeOfRightPaddle
-                     && y <= topEdgeOfRightPaddle
-                     && y >= bottomEdgeOfRightPaddle
+    leftCollision = x - ballRadius <= rightEdgeOfLeftPaddle
+                    && y + ballRadius <= topEdgeOfLeftPaddle
+                    && y - ballRadius >= bottomEdgeOfLeftPaddle
+    rightCollision = x + ballRadius >= leftEdgeOfRightPaddle
+                     && y + ballRadius <= topEdgeOfRightPaddle
+                     && y - ballRadius >= bottomEdgeOfRightPaddle
     rightEdgeOfLeftPaddle = playerL_x + (paddleWidth / 2)
     leftEdgeOfRightPaddle = playerR_x - (paddleWidth / 2)
     topEdgeOfLeftPaddle = playerL_y + (paddleHeight / 2)
