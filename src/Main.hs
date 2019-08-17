@@ -1,7 +1,7 @@
 module Main where
 
 import Graphics.Gloss
-import Graphics.Gloss.Data.ViewPort (ViewPort)
+import Graphics.Gloss.Interface.Pure.Game
 
 type Radius = Float
 type Position = (Float, Float)
@@ -31,8 +31,9 @@ data PongGame = Game
   { ballLoc :: Position  -- ^ Pong ball (x, y) location.
   , ballVel :: Position  -- ^ Pong ball (x, y) velocity.
   , playerR :: Position  -- ^ Right player paddle position.
-                         -- Zero is the middle of the screen.
+                         --   Zero is the middle of the screen.
   , playerL :: Position  -- ^ Left player paddle position.
+  , paused :: Bool       -- ^ Is the game currently paused?
   } deriving Show
 
 -- | The starting state for the game of Pong.
@@ -42,6 +43,7 @@ initialState = Game
   , ballVel = (30, -30)
   , playerR = (120, -80)
   , playerL = (-120, -80)
+  , paused = False
   }
 
 -- | Update the ball position using its current velocity.
@@ -90,8 +92,10 @@ render game =
     paddleColor = light (light blue)
 
 -- | Update the game by moving the ball and bouncing off walls.
-update :: ViewPort -> Float -> PongGame -> PongGame
-update _ seconds = paddleBounce . wallBounce . moveBall seconds
+update :: Float -> PongGame -> PongGame
+update seconds game =
+  if paused game then game
+  else (paddleBounce . wallBounce . moveBall seconds) game
 
 -- | Given position and radius of the ball, return whether a collision occurred.
 wallCollision :: Position -> Bool
@@ -139,8 +143,37 @@ paddleCollision Game{ ballLoc = (x, y)
     topEdgeOfRightPaddle = playerR_y + (paddleHeight / 2)
     bottomEdgeOfRightPaddle = playerR_y - (paddleHeight / 2)
 
+-- | Respond to key events.
+handleKeys :: Event -> PongGame -> PongGame
+
+-- 'r': Reset the ball to the center
+handleKeys (EventKey (Char 'r') _ _ _) game =
+  game { ballLoc = (0, 0) }
+
+-- Pause on 'p'
+handleKeys (EventKey (Char 'p') Down _ _) game = game {paused = not (paused game)}
+
+-- 'w': Left player move up
+handleKeys (EventKey (Char 'w') Down _ _) game@Game{playerL = (lx, ly)} =
+  game {playerL = (lx, ly+1)}
+
+-- 's': Left player move down
+handleKeys (EventKey (Char 's') Down _ _) game@Game{playerL = (lx, ly)} =
+  game {playerL = (lx, ly-1)}
+
+-- Down: Right player move down
+handleKeys (EventKey (SpecialKey KeyUp) Down _ _) game@Game{playerR = (rx, ry)} =
+  game {playerR = (rx, ry+1)}
+
+-- Up: Right player move up
+handleKeys (EventKey (SpecialKey KeyDown) Down _ _) game@Game{playerR = (rx, ry)} =
+  game {playerR = (rx, ry-1)}
+
+-- Do nothing for all other events.
+handleKeys _ game = game
+
 window :: Display
 window = InWindow "Pong" (width, height) windowPosition
 
 main :: IO ()
-main = simulate window background fps initialState render update
+main = play window background fps initialState render handleKeys update
