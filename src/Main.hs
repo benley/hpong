@@ -194,13 +194,23 @@ handleKeys _ game = game
 
 -- | Apply effects from held-down buttons
 applyButtonActions :: PongGame -> PongGame
-applyButtonActions game@Game{playerL = (lx, ly), playerR = (rx, ry), buttons}
-  -- TODO: handle multiple buttons held together
-  | playerL_up   buttons == Down = game {playerL = (lx, ly+movementStep)}
-  | playerL_down buttons == Down = game {playerL = (lx, ly-movementStep)}
-  | playerR_up   buttons == Down = game {playerR = (rx, ry+movementStep)}
-  | playerR_down buttons == Down = game {playerR = (rx, ry-movementStep)}
-  | otherwise = game
+applyButtonActions = pl_up . pl_dn . pr_up . pr_dn
+  where
+    inBounds y' = abs y' <= fromIntegral height / 2 - paddleHeight / 2
+    pushed k = k == Down
+
+    pl_up g@Game{playerL = (x, y), buttons}
+      | pushed (playerL_up buttons)   && inBounds (y+movementStep) = g{playerL = (x, y+movementStep)}
+      | otherwise = g
+    pl_dn g@Game{playerL = (x, y), buttons}
+      | pushed (playerL_down buttons) && inBounds (y-movementStep) = g{playerL = (x, y-movementStep)}
+      | otherwise = g
+    pr_up g@Game{playerR = (x, y), buttons}
+      | pushed (playerR_up buttons)   && inBounds (y+movementStep) = g{playerR = (x, y+movementStep)}
+      | otherwise = g
+    pr_dn g@Game{playerR = (x, y), buttons}
+      | pushed (playerR_down buttons) && inBounds (y-movementStep) = g{playerR = (x, y-movementStep)}
+      | otherwise = g
 
 window :: Display
 window = InWindow "Pong" (width, height) windowPosition
