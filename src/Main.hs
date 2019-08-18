@@ -130,10 +130,10 @@ paddleCollision Game{ ballLoc = (x, y)
                     , playerL = (playerL_x, playerL_y) } =
   leftCollision || rightCollision
   where
-    leftCollision = x - ballRadius <= rightEdgeOfLeftPaddle
+    leftCollision = x - ballRadius == rightEdgeOfLeftPaddle
                     && y + ballRadius <= topEdgeOfLeftPaddle
                     && y - ballRadius >= bottomEdgeOfLeftPaddle
-    rightCollision = x + ballRadius >= leftEdgeOfRightPaddle
+    rightCollision = x + ballRadius == leftEdgeOfRightPaddle
                      && y + ballRadius <= topEdgeOfRightPaddle
                      && y - ballRadius >= bottomEdgeOfRightPaddle
     rightEdgeOfLeftPaddle = playerL_x + (paddleWidth / 2)
