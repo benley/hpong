@@ -1,3 +1,4 @@
+{-# LANGUAGE NamedFieldPuns #-}
 module Main where
 
 import Graphics.Gloss
@@ -26,6 +27,10 @@ background = black
 fps :: Int
 fps = 60
 
+-- | How far to move the paddle per keypress event
+movementStep :: Float
+movementStep = 5
+
 -- | Data describing the state of the pong game.
 data PongGame = Game
   { ballLoc :: Position  -- ^ Pong ball (x, y) location.
@@ -34,7 +39,11 @@ data PongGame = Game
                          --   Zero is the middle of the screen.
   , playerL :: Position  -- ^ Left player paddle position.
   , paused :: Bool       -- ^ Is the game currently paused?
+  , buttons :: ButtonStatus
   } deriving Show
+
+data ButtonStatus = Buttons
+  { playerL_up, playerL_down, playerR_up, playerR_down :: KeyState } deriving Show
 
 -- | The starting state for the game of Pong.
 initialState :: PongGame
@@ -44,6 +53,12 @@ initialState = Game
   , playerR = (120, -80)
   , playerL = (-120, -80)
   , paused = False
+  , buttons = Buttons
+              { playerL_up = Up
+              , playerL_down = Up
+              , playerR_up = Up
+              , playerR_down = Up
+              }
   }
 
 -- | Update the ball position using its current velocity.
@@ -93,9 +108,15 @@ render game =
 
 -- | Update the game by moving the ball and bouncing off walls.
 update :: Float -> PongGame -> PongGame
-update seconds game =
-  if paused game then game
-  else (paddleBounce . wallBounce . moveBall seconds) game
+update seconds game
+  | paused game = game
+  | otherwise = (detectWin . paddleBounce . wallBounce . applyButtonActions . moveBall seconds) game
+
+detectWin :: PongGame -> PongGame
+detectWin game@Game{ballLoc = (x, _)}
+  | x <= -fromIntegral width / 2 = error "RIGHT PLAYER WINS"
+  | x >= fromIntegral width / 2 = error "LEFT PLAYER WINS"
+  | otherwise = game
 
 -- | Given position and radius of the ball, return whether a collision occurred.
 wallCollision :: Position -> Bool
@@ -107,12 +128,11 @@ wallCollision (_, y) = topCollision || bottomCollision
 -- | Detect a collision with one of the side walls. Upon collisions,
 -- update the velocity of the ball to bounce it off the wall.
 wallBounce :: PongGame -> PongGame
-wallBounce game = game { ballVel = (vx, vy') }
-  where
-    (vx, vy) = ballVel game -- old velocities
-    vy' = if wallCollision (ballLoc game)
-          then -vy -- update velocity: switch direction
-          else vy  -- do nothing: return the old velocity unchanged
+wallBounce game@Game{ballVel = (vx, vy)} =
+  game { ballVel = (vx, vy') }
+  where vy' = if wallCollision (ballLoc game)
+              then -vy -- update velocity: switch direction
+              else vy  -- do nothing: return the old velocity unchanged
 
 -- | Detect a collision with a paddle. Upon collisions,
 -- change the velocity of the ball to bounce it off the paddle.
@@ -147,30 +167,34 @@ paddleCollision Game{ ballLoc = (x, y)
 handleKeys :: Event -> PongGame -> PongGame
 
 -- 'r': Reset the ball to the center
-handleKeys (EventKey (Char 'r') _ _ _) game =
+handleKeys (EventKey (Char 'r') Down _ _) game =
   game { ballLoc = (0, 0) }
 
--- Pause on 'p'
-handleKeys (EventKey (Char 'p') Down _ _) game = game {paused = not (paused game)}
+-- 'p': Pause the game
+handleKeys (EventKey (Char 'p') Down _ _) game =
+  game { paused = not (paused game) }
 
--- 'w': Left player move up
-handleKeys (EventKey (Char 'w') Down _ _) game@Game{playerL = (lx, ly)} =
-  game {playerL = (lx, ly+1)}
-
--- 's': Left player move down
-handleKeys (EventKey (Char 's') Down _ _) game@Game{playerL = (lx, ly)} =
-  game {playerL = (lx, ly-1)}
-
--- Down: Right player move down
-handleKeys (EventKey (SpecialKey KeyUp) Down _ _) game@Game{playerR = (rx, ry)} =
-  game {playerR = (rx, ry+1)}
-
--- Up: Right player move up
-handleKeys (EventKey (SpecialKey KeyDown) Down _ _) game@Game{playerR = (rx, ry)} =
-  game {playerR = (rx, ry-1)}
+-- Keys that can be held down go into Game state
+handleKeys (EventKey key ks _ _) game@Game{buttons} =
+  case key of
+    Char 'w' -> game {buttons = buttons {playerL_up = ks}}
+    Char 's' -> game {buttons = buttons {playerL_down = ks}}
+    SpecialKey KeyUp -> game {buttons = buttons {playerR_up = ks}}
+    SpecialKey KeyDown -> game {buttons = buttons {playerR_down = ks}}
+    _ -> game
 
 -- Do nothing for all other events.
 handleKeys _ game = game
+
+-- | Apply effects from held-down buttons
+applyButtonActions :: PongGame -> PongGame
+applyButtonActions game@Game{playerL = (lx, ly), playerR = (rx, ry), buttons}
+  -- TODO: handle multiple buttons held together
+  | playerL_up   buttons == Down = game {playerL = (lx, ly+movementStep)}
+  | playerL_down buttons == Down = game {playerL = (lx, ly-movementStep)}
+  | playerR_up   buttons == Down = game {playerR = (rx, ry+movementStep)}
+  | playerR_down buttons == Down = game {playerR = (rx, ry-movementStep)}
+  | otherwise = game
 
 window :: Display
 window = InWindow "Pong" (width, height) windowPosition
