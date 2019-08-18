@@ -7,19 +7,24 @@ import Graphics.Gloss.Interface.Pure.Game
 type Radius = Float
 type Position = (Float, Float)
 
+-- | Window dimenaions
 width, height :: Int
 width = 400
 height = 400
+
 windowPosition :: (Int, Int)
 windowPosition = (400, 400)
 
+-- | Ball radius
 ballRadius :: Radius
 ballRadius = 10
 
+-- | Paddle dimensions
 paddleWidth, paddleHeight :: Float
 paddleWidth = 26
 paddleHeight = 86
 
+-- | Game background color
 background :: Color
 background = black
 
@@ -42,16 +47,17 @@ data PongGame = Game
   , buttons :: ButtonStatus
   } deriving Show
 
+-- | Held-down status of varions action buttons
 data ButtonStatus = Buttons
   { playerL_up, playerL_down, playerR_up, playerR_down :: KeyState } deriving Show
 
 -- | The starting state for the game of Pong.
 initialState :: PongGame
 initialState = Game
-  { ballLoc = (-10, 30)
+  { ballLoc = (0, 0)
   , ballVel = (30, -30)
-  , playerR = (120, -80)
-  , playerL = (-120, -80)
+  , playerR = ( fromIntegral width/2 - paddleWidth/2 - 10, -80)
+  , playerL = (-fromIntegral width/2 + paddleWidth/2 + 10, -80)
   , paused = False
   , buttons = Buttons
               { playerL_up = Up
@@ -92,7 +98,7 @@ render game =
     wall yOffset =
       translate 0 yOffset $
         color wallColor $
-          rectangleSolid 270 10
+          rectangleSolid (fromIntegral width * 0.9) 10
 
     wallColor = greyN 0.5
     walls = pictures [wall (fromIntegral height / 2), wall (-fromIntegral height / 2)]
@@ -101,7 +107,7 @@ render game =
     mkPaddle :: Color -> Position -> Picture
     mkPaddle col (x, y) = pictures
       [ translate x y $ color col $ rectangleSolid paddleWidth paddleHeight
-      , translate x y $ color paddleColor $ rectangleSolid 20 80
+      , translate x y $ color paddleColor $ rectangleSolid (paddleWidth * 0.75) (paddleHeight * 0.9)
       ]
 
     paddleColor = light (light blue)
