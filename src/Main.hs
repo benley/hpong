@@ -23,13 +23,23 @@ paddleWidth, paddleHeight :: Float
 paddleWidth = 26
 paddleHeight = 86
 
--- | Game colors
-ballColor, paddleColor, wallColor, bgColor :: Color
+wallThickness :: Float
+wallThickness = 10
 
-bgColor = black
-ballColor = dark red
-wallColor = greyN 0.5
-paddleColor = light (light blue)
+data ColorTheme = ColorTheme
+  { ballColor, paddleColor, leftPaddleBorderColor, rightPaddleBorderColor
+  , wallColor, bgColor :: Color
+  } deriving Show
+
+defaultTheme :: ColorTheme
+defaultTheme = ColorTheme
+  { ballColor = dark red
+  , paddleColor = light (light blue)
+  , leftPaddleBorderColor = orange
+  , rightPaddleBorderColor = rose
+  , wallColor = greyN 0.5
+  , bgColor = black
+  }
 
 fps :: Int
 fps = 60
@@ -47,11 +57,13 @@ data PongGame = Game
   , playerL :: Position  -- ^ Left player paddle position.
   , paused :: Bool       -- ^ Is the game currently paused?
   , buttons :: ButtonStatus
+  , theme :: ColorTheme
   } deriving Show
 
 -- | Held-down status of varions action buttons
 data ButtonStatus = Buttons
-  { playerL_up, playerL_down, playerR_up, playerR_down :: KeyState } deriving Show
+  { playerL_up, playerL_down, playerR_up, playerR_down :: KeyState
+  } deriving Show
 
 initialState :: PongGame
 initialState = Game
@@ -66,6 +78,7 @@ initialState = Game
               , playerR_up = Up
               , playerR_down = Up
               }
+  , theme = defaultTheme
   }
 
 -- | Update ball position using its velocity
@@ -84,22 +97,22 @@ moveBall seconds game = game { ballLoc = (x', y') }
 
 render :: PongGame  -- ^ Game state to render
        -> Picture   -- ^ A picture of this game state
-render Game{ballLoc, playerL, playerR} =
+render Game{ballLoc, playerL, playerR, theme} =
   pictures [ ball
            , walls
-           , mkPaddle rose playerR
-           , mkPaddle orange playerL
+           , mkPaddle (rightPaddleBorderColor theme) playerR
+           , mkPaddle (leftPaddleBorderColor theme) playerL
            ]
   where
-    ball = uncurry translate ballLoc $ color ballColor $ circleSolid ballRadius
+    ball = uncurry translate ballLoc $ color (ballColor theme) (circleSolid ballRadius)
 
-    -- Top and bottom walls
     mkWall :: Float -> Picture
     mkWall yOffset =
       translate 0 yOffset $
-        color wallColor $
-          rectangleSolid (fromIntegral width * 0.9) 10
+        color (wallColor theme) $
+          rectangleSolid (fromIntegral width * 0.9) wallThickness
 
+    -- Top and bottom walls
     walls = pictures [ mkWall (fromIntegral height / 2)
                      , mkWall (-fromIntegral height / 2)
                      ]
@@ -110,7 +123,7 @@ render Game{ballLoc, playerL, playerR} =
              -> Picture
     mkPaddle borderColor (x, y) = pictures
       [ translate x y $ color borderColor $ rectangleSolid paddleWidth paddleHeight
-      , translate x y $ color paddleColor $ rectangleSolid (paddleWidth * 0.75) (paddleHeight * 0.9)
+      , translate x y $ color (paddleColor theme) $ rectangleSolid (paddleWidth * 0.75) (paddleHeight * 0.9)
       ]
 
 -- | Update the game: move the ball, detect collisions/bounces/wins, apply button effects
@@ -197,6 +210,7 @@ handleKeys _ game = game
 -- | Apply effects from held-down buttons
 applyButtonActions :: PongGame -> PongGame
 applyButtonActions = pL_up . pL_dn . pR_up . pR_dn
+  -- This whole function is gross; I'll fix it later.
   where
     inBounds y = abs y <= fromIntegral height / 2 - paddleHeight / 2
 
@@ -217,4 +231,4 @@ window :: Display
 window = InWindow "Pong" (width, height) windowPosition
 
 main :: IO ()
-main = play window bgColor fps initialState render handleKeys update
+main = play window (bgColor $ theme initialState) fps initialState render handleKeys update
