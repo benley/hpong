@@ -55,9 +55,12 @@ data PongGame = Game
   , playerR :: Position  -- ^ Right player paddle position.
                          --   Zero is the middle of the screen.
   , playerL :: Position  -- ^ Left player paddle position.
+  , score_L :: Int
+  , score_R :: Int
   , paused :: Bool       -- ^ Is the game currently paused?
   , buttons :: ButtonStatus
   , theme :: ColorTheme
+  , windowSize :: (Int, Int)
   } deriving Show
 
 -- | Held-down status of varions action buttons
@@ -71,6 +74,8 @@ initialState = Game
   , ballVel = (30, -30)
   , playerR = ( fromIntegral width/2 - paddleWidth/2 - 10, -80)
   , playerL = (-fromIntegral width/2 + paddleWidth/2 + 10, -80)
+  , score_L = 0
+  , score_R = 0
   , paused = False
   , buttons = Buttons
               { playerL_up = Up
@@ -79,6 +84,7 @@ initialState = Game
               , playerR_down = Up
               }
   , theme = defaultTheme
+  , windowSize = (width, height)
   }
 
 -- | Update ball position using its velocity
@@ -97,14 +103,22 @@ moveBall seconds game = game { ballLoc = (x', y') }
 
 render :: PongGame  -- ^ Game state to render
        -> Picture   -- ^ A picture of this game state
-render Game{ballLoc, playerL, playerR, theme} =
+render Game{ballLoc, playerL, playerR, score_L, score_R, theme
+           , windowSize = (wsizeX, wsizeY)
+           } =
+  scale (fromIntegral wsizeX / fromIntegral width) (fromIntegral wsizeY / fromIntegral height) $
   pictures [ ball
            , walls
            , mkPaddle (rightPaddleBorderColor theme) playerR
            , mkPaddle (leftPaddleBorderColor theme) playerL
+           , scoreText_L
+           , scoreText_R
            ]
   where
     ball = uncurry translate ballLoc $ color (ballColor theme) (circleSolid ballRadius)
+
+    scoreText_L = translate (-110) (fromIntegral height * 0.3) $ scale 0.3 0.3 $ color red $ text (show score_L)
+    scoreText_R = translate   100  (fromIntegral height * 0.3) $ scale 0.3 0.3 $ color red $ text (show score_R)
 
     mkWall :: Float -> Picture
     mkWall yOffset =
@@ -132,14 +146,17 @@ update :: Float    -- ^ Seconds since last frame
        -> PongGame -- ^ New game state
 update seconds game
   | paused game = game
-  | otherwise = (detectWin . paddleBounce . wallBounce . applyButtonActions . moveBall seconds) game
+  | otherwise = (updateScore . paddleBounce . wallBounce . applyButtonActions . moveBall seconds) game
 
--- | If someone scores, crash the entire game because fuck it
-detectWin :: PongGame -> PongGame
-detectWin game@Game{ballLoc = (x, _)}
-  | x <= -fromIntegral width / 2 = error "RIGHT PLAYER WINS"
-  | x >=  fromIntegral width / 2 = error "LEFT PLAYER WINS"
+-- | When either player scores, update the scorecard and reset the ball position
+updateScore :: PongGame -> PongGame
+updateScore game@Game{ballLoc = (x, _), score_R, score_L}
+  | x <= -fromIntegral width / 2 = resetBall $ game { score_R = score_R + 1 }
+  | x >=  fromIntegral width / 2 = resetBall $ game { score_L = score_L + 1 }
   | otherwise = game
+
+resetBall :: PongGame -> PongGame
+resetBall game = game { ballLoc = (0, 0) }
 
 -- | Detect top / bottom wall collision
 wallCollision :: Position -> Bool
@@ -184,19 +201,19 @@ paddleCollision Game{ ballLoc = (x, y)
     topEdgeOfRightPaddle = playerR_y + (paddleHeight / 2)
     bottomEdgeOfRightPaddle = playerR_y - (paddleHeight / 2)
 
--- | Keypress handler
-handleKeys :: Event -> PongGame -> PongGame
+-- | Keypress and other events handler
+handleEvent :: Event -> PongGame -> PongGame
 
 -- 'r': Reset ball to the center
-handleKeys (EventKey (Char 'r') Down _ _) game =
-  game { ballLoc = (0, 0) }
+handleEvent (EventKey (Char 'r') Down _ _) game =
+  resetBall game
 
 -- 'p': Pause the game
-handleKeys (EventKey (Char 'p') Down _ _) game@Game{paused} =
+handleEvent (EventKey (Char 'p') Down _ _) game@Game{paused} =
   game { paused = not paused }
 
 -- Paddle motion keys go into game state to be applied later
-handleKeys (EventKey key ks _ _) game@Game{buttons} =
+handleEvent (EventKey key ks _ _) game@Game{buttons} =
   case key of
     Char 'w' -> game {buttons = buttons {playerL_up = ks}}
     Char 's' -> game {buttons = buttons {playerL_down = ks}}
@@ -204,8 +221,12 @@ handleKeys (EventKey key ks _ _) game@Game{buttons} =
     SpecialKey KeyDown -> game {buttons = buttons {playerR_down = ks}}
     _ -> game
 
--- Ignore all other input
-handleKeys _ game = game
+-- Window resized? Stick it in game state.
+handleEvent (EventResize xy) game =
+  game { windowSize = xy }
+
+-- Ignore un-handled events
+handleEvent _ game = game
 
 -- | Apply effects from held-down buttons
 applyButtonActions :: PongGame -> PongGame
@@ -227,8 +248,10 @@ applyButtonActions = pL_up . pL_dn . pR_up . pR_dn
       | inBounds (y-movementStep) = g{playerR = (x, y-movementStep)}
     pR_dn g = g
 
-window :: Display
-window = InWindow "Pong" (width, height) windowPosition
+start :: PongGame -> IO ()
+start game@Game{windowSize, theme} =
+  play window (bgColor theme) fps game render handleEvent update
+  where window = InWindow "Pong" windowSize windowPosition
 
 main :: IO ()
-main = play window (bgColor $ theme initialState) fps initialState render handleKeys update
+main = start initialState
